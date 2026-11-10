@@ -29,11 +29,28 @@ Classic Rides is the existing React + Vite showroom/enquiry UI with an Express, 
 - `GET /api/auth/me` — requires `Authorization: Bearer <token>` and returns the signed-in user without the password.
 - `POST /api/bookings` — requires a JWT and stores the enquiry in `bookings`.
 
-## Deploy to Render
+## Deploy the backend to Render and frontend to Vercel
 
-The root `render.yaml` defines a Node web service for the API and a static site for the unchanged Vite frontend. Push the project to GitHub, then create a Render **Blueprint** from that repository. Supply private values for `MONGODB_URI`, `JWT_SECRET`, and `CLIENT_ORIGIN` when prompted. Set `CLIENT_ORIGIN` to the deployed frontend's exact HTTPS origin (no trailing slash). The frontend's `VITE_API_BASE_URL` is populated from the API service host; redeploy the static site after changing it.
+Use the `classic-rides-deploy` branch, which has the project files at the repository root. The root `render.yaml` creates only the Express API service; `vercel.json` configures the Vite frontend build and SPA fallback.
 
-In Atlas, permit the Render service's outbound access through **Network Access** (Atlas documents `0.0.0.0/0` as a broad option; use the narrowest workable policy for production). Keep the database user least-privileged. After deployment, open the API service's `/api/health` URL. It should report `{"ok":true,"database":"connected"}` only after Mongoose has connected. A failed connection means the URI, database-user credentials, network access, or cluster availability still needs attention.
+### 1. Deploy the API on Render
+
+1. In MongoDB Atlas, allow the Render service to connect through **Network Access** and use a least-privilege database user. Atlas documents `0.0.0.0/0` as a broad option; apply the narrowest workable policy for production.
+2. In Render, choose **New → Blueprint**, select the GitHub repository and the `classic-rides-deploy` branch, then apply the Blueprint from `render.yaml`.
+3. Enter your own Atlas URI for `MONGODB_URI` and a private random value for `JWT_SECRET` when prompted. Do not use the local `.env` file or put these values in Vercel.
+4. Wait for the API service to deploy. Open `https://<your-render-api-host>/api/health`; it must return `{"ok":true,"database":"connected"}`. The Blueprint temporarily sets `CLIENT_ORIGIN` to `*` so the Vercel site can be deployed first.
+
+### 2. Deploy the frontend on Vercel
+
+1. In Vercel, import the same GitHub repository and select the `classic-rides-deploy` branch. Set the project/root directory to `.` (repository root). `vercel.json` specifies `npm run build`, the `dist` output directory, and the SPA fallback.
+2. Add the environment variable `VITE_API_BASE_URL` for Production, using the Render API's full HTTPS origin only, for example `https://your-api-service.onrender.com` (no `/api` suffix). Deploy or redeploy the frontend after adding/changing it; Vite embeds this value at build time.
+3. Open the Vercel deployment and note its production URL.
+
+### 3. Restrict API access to your deployed site
+
+In Render's API service **Environment** settings, replace the temporary `CLIENT_ORIGIN=*` with your exact Vercel production origin, such as `https://your-project.vercel.app` (no trailing slash), then save and redeploy/restart the API. You may set a comma-separated list if you intentionally support multiple origins. Avoid `*` for the final production configuration.
+
+Finally, reload the Vercel site, register/login, and submit a test enquiry. Confirm documents appear in Atlas under the `users` and `bookings` collections. Never expose `MONGODB_URI` or `JWT_SECRET` in a `VITE_` variable. A Render health response of `disconnected` means the database is not connected; check the URI, Atlas database-user credentials, network access, and cluster status.
 
 ## Security
 
